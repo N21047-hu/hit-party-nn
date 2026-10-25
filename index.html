@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#171717">
+  <title>Hitster Privat</title>
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+  <script src="https://open.spotify.com/embed/iframe-api/v1" async></script>
+  <style>
+    :root { color-scheme: dark; --bg:#430dc4; --panel:#1e1e1e; --accent:#98abff; --muted:#b8b8b8; }
+    * { box-sizing:border-box; }
+    body { margin:0; min-height:100vh; background:radial-gradient(circle at top,#292929,#111 55%); color:#fff; font-family:system-ui,-apple-system,Segoe UI,sans-serif; }
+    main { width:min(680px,100%); margin:auto; padding:24px 18px 40px; }
+    header { text-align:center; margin-bottom:22px; }
+    h1 { margin:0; font-size:clamp(2rem,8vw,3.2rem); letter-spacing:-.05em; }
+    h1 span { color:var(--accent); }
+    .sub { color:var(--muted); margin:8px 0 0; }
+    .panel { background:rgba(30,30,30,.96); border:1px solid #383838; border-radius:22px; padding:20px; margin:16px 0; box-shadow:0 12px 35px #0003; }
+    .status { color:var(--muted); min-height:1.5em; text-align:center; margin:8px 0 14px; }
+    #reader { width:100%; max-width:420px; margin:0 auto; overflow:hidden; border-radius:14px; }
+    #reader video { border-radius:14px; }
+    .row { display:flex; gap:10px; flex-wrap:wrap; justify-content:center; }
+    button { border:0; border-radius:999px; padding:14px 20px; font:700 1rem system-ui,sans-serif; cursor:pointer; }
+    button:focus-visible { outline:3px solid white; outline-offset:3px; }
+    .primary { background:var(--accent); color:#111; }
+    .secondary { background:#383838; color:#fff; }
+    .play { width:150px; height:150px; border-radius:50%; font-size:3.2rem; display:block; margin:16px auto 10px; box-shadow:0 8px 30px #b7ff4520; }
+    .play:disabled { opacity:.45; cursor:not-allowed; }
+    .now-playing { text-align:center; color:var(--muted); min-height:1.5em; }
+    .answer { text-align:center; padding:18px 4px 8px; }
+    .answer[hidden] { display:none; }
+    .answer h2 { font-size:clamp(1.8rem,7vw,3rem); line-height:1.1; margin:8px 0; }
+    .artist { font-size:clamp(1.2rem,5vw,1.7rem); color:var(--accent); }
+    .year { font-size:clamp(2.8rem,12vw,5rem); font-weight:900; letter-spacing:-.04em; }
+    details summary { cursor:pointer; font-weight:700; }
+    label { display:block; margin:12px 0 6px; color:var(--muted); }
+    input { width:100%; padding:12px; border-radius:10px; border:1px solid #555; background:#111; color:#fff; font:inherit; }
+    .small { font-size:.9rem; color:var(--muted); line-height:1.5; }
+    .warning { color:#ffd27a; }
+    .spotify-host { position:relative; width:100%; height:auto; max-width: 500px; margin: 20px auto; overflow:visible; opacity:1; pointer-events:auto; left:auto; top:auto; }
+    footer { text-align:center; color:#888; font-size:.82rem; margin-top:24px; }
+    a { color:var(--accent); }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Hit <span>Party</span></h1>
+    <p class="sub">Scannen. Zuhören. Jahr erraten. Auflösen.</p>
+  </header>
+
+  <section class="panel">
+    <h2>1. QR-Code scannen</h2>
+      <div id="reader"></div>
+    <p id="scanStatus" class="status" role="status">Kamera noch nicht gestartet.</p>
+    <div class="row">
+      <button class="primary" id="startScan">Kamera starten</button>
+      <button class="secondary" id="stopScan" disabled>Scan stoppen</button>
+    </div>
+    <p class="small">Alternativ kannst du unten eine Songnummer manuell laden.</p>
+    <div class="row">
+      <input id="manualCode" inputmode="numeric" placeholder="QR-Inhalt / Songnummer" aria-label="Songnummer eingeben" style="max-width:220px">
+      <button class="secondary" id="loadCode">Song laden</button>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>2. Song anhören</h2>
+    <p id="trackStatus" class="status" role="status">Noch kein Song ausgewählt.</p>
+    <button id="playPause" class="primary play" aria-label="Wiedergabe starten oder pausieren" disabled>▶</button>
+    <p class="now-playing" id="playHint">Titel und Cover bleiben während des Ratens verborgen.</p>
+    <div class="row" style="margin-top:18px">
+      <button id="reveal" class="primary" disabled>Auflösen</button>
+      <button id="next" class="secondary">Nächster Song</button>
+    </div>
+    <div id="answer" class="answer" hidden aria-live="polite">
+      <p>DER SONG WAR …</p>
+      <h2 id="answerTitle"></h2>
+      <p id="answerArtist" class="artist"></p>
+      <div id="answerYear" class="year"></div>
+    </div>
+  </section>
+
+  <section class="panel">
+    <details>
+      <summary>Song-Datenbank bearbeiten</summary>
+      <p class="small">Passe das Array <code>SONGS</code> im Code an. Die ID muss mit dem QR-Code-Inhalt übereinstimmen. Für Spotify verwendest du die Track-ID aus einer URL wie <code>https://open.spotify.com/track/TRACK_ID</code>.</p>
+      <label for="customCode">Songnummer / QR-Inhalt</label>
+      <input id="customCode" placeholder="z. B. 4">
+      <label for="customTitle">Songtitel</label>
+      <input id="customTitle" placeholder="Titel">
+      <label for="customArtist">Interpret</label>
+      <input id="customArtist" placeholder="Interpret">
+      <label for="customYear">Veröffentlichungsjahr</label>
+      <input id="customYear" type="number" min="1900" max="2100" placeholder="z. B. 1998">
+      <label for="customSpotify">Spotify-Track-ID oder Track-URL</label>
+      <input id="customSpotify" placeholder="Spotify-Track-ID / URL">
+      <div class="row" style="margin-top:14px">
+        <button class="primary" id="addSong">Song hinzufügen</button>
+      </div>
+      <p class="small">Hinweis: Änderungen über dieses Formular gelten nur für diese geöffnete Seite und werden nicht dauerhaft gespeichert. Trage eigene Songs dauerhaft direkt in <code>SONGS</code> im HTML-Code ein.</p>
+    </details>
+  </section>
+
+  <p class="small warning">Spotify-Hinweis: Die Wiedergabe hängt von Verfügbarkeit, Anmeldung, Browser und Spotify-Einbettungsregeln ab. Der Player ist absichtlich optisch verborgen. Wenn Spotify die Wiedergabe so nicht zulässt, verwende den sichtbaren Spotify-Player oder öffne den Song direkt in Spotify.</p>
+  <footer>Privates Fanprojekt · Nicht mit Hitster oder Spotify verbunden</footer>
+</main>
+
+<!-- Der Spotify-iFrame bleibt im DOM, ist aber visuell verborgen. -->
+<div class="spotify-host" aria-hidden="true">
+  <div id="spotifyEmbed"></div>
+</div>
+
+<script>
+  // BEISPIEL-DATENBANK:
+  // Ersetze Titel, Interpret, Jahr und spotifyTrackId durch deine eigenen Songs.
+  // Die drei IDs hier sind Demo-Platzhalter und müssen durch echte Spotify-Track-IDs
+  // ersetzt werden, damit Musik abgespielt werden kann.
+  const SONGS = {
+    "1": { title: "Babydoll", artist: "Dominik Fike", year: 2018, spotifyTrackId: "7yNf9YjeO5JXUE3JEBgnYc" },
+    "2": { title: "Heart of Glass", artist: "Blondie", year: 1978, spotifyTrackId: "41AE8ODX2JETBCa6muhSLY" },
+    "3": { title: "Look after you", artist: "The Fray", year: 2005, spotifyTrackId: "5l6hpyTGBK0LAAxgPnqTQL" }
+  };
+
+  let scanner = null;
+  let scanning = false;
+  let currentCode = null;
+  let currentSong = null;
+  let spotifyController = null;
+  let playerReady = false;
+  let playing = false;
+  let lastScannedText = "";
+  let lastScannedAt = 0;
+
+  const $ = id => document.getElementById(id);
+  const scanStatus = $("scanStatus");
+  const trackStatus = $("trackStatus");
+  const playPause = $("playPause");
+  const reveal = $("reveal");
+  const answer = $("answer");
+
+  function normaliseCode(raw) {
+    const text = String(raw ?? "").trim();
+    // Unterstützt QR-Codes, die schlicht "1" oder z. B. "song:1" enthalten.
+    const match = text.match(/(?:^|[^0-9])([0-9]+)(?:$|[^0-9])/);
+    return match ? match[1] : text;
+  }
+
+  function getSpotifyTrackId(value) {
+    const raw = String(value || "").trim();
+    const urlMatch = raw.match(/open\.spotify\.com\/(?:intl-[a-z-]+\/)?track\/([A-Za-z0-9]+)/);
+    return urlMatch ? urlMatch[1] : raw;
+  }
+
+  function setScanStatus(message) { scanStatus.textContent = message; }
+  function setTrackStatus(message) { trackStatus.textContent = message; }
+
+  function loadSong(rawCode) {
+    const code = normaliseCode(rawCode);
+    const song = SONGS[code];
+    if (!song) {
+      setTrackStatus(`Keine Songnummer „${code}“ in der Datenbank gefunden.`);
+      return;
+    }
+
+    currentCode = code;
+    currentSong = song;
+    playing = false;
+    playPause.textContent = "▶";
+    playPause.disabled = !playerReady;
+    reveal.disabled = false;
+    answer.hidden = true;
+    $("answerTitle").textContent = "";
+    $("answerArtist").textContent = "";
+    $("answerYear").textContent = "";
+
+    if (playerReady) {
+      const trackId = getSpotifyTrackId(song.spotifyTrackId);
+      if (!/^[A-Za-z0-9]{22}$/.test(trackId)) {
+        setTrackStatus(`Song ${code} geladen, aber die Spotify-Track-ID sieht ungültig aus.`);
+        playPause.disabled = true;
+        return;
+      }
+      spotifyController.loadUri(`spotify:track:${trackId}`);
+      setTrackStatus(`Song ${code} geladen. Drücke ▶, um zu starten.`);
+    } else {
+      setTrackStatus(`Song ${code} geladen. Spotify-Player wird vorbereitet …`);
+    }
+  }
+
+  function revealSong() {
+    if (!currentSong) return;
+    $("answerTitle").textContent = currentSong.title;
+    $("answerArtist").textContent = currentSong.artist;
+    $("answerYear").textContent = currentSong.year;
+    answer.hidden = false;
+  }
+
+  async function startCamera() {
+    if (!window.Html5Qrcode) {
+      setScanStatus("QR-Scanner konnte nicht geladen werden. Prüfe deine Internetverbindung.");
+      return;
+    }
+    if (scanning) return;
+    scanner = new Html5Qrcode("reader");
+    try {
+      await scanner.start(
+        { facingMode: "environment" },
+        { fps: 10, qrbox: { width: 240, height: 240 }, aspectRatio: 1.0 },
+        decodedText => {
+          const now = Date.now();
+          if (decodedText === lastScannedText && now - lastScannedAt < 2500) return;
+          lastScannedText = decodedText;
+          lastScannedAt = now;
+          $("manualCode").value = decodedText;
+          loadSong(decodedText);
+          setScanStatus(`QR-Code erkannt: ${decodedText}`);
+        },
+        () => {}
+      );
+      scanning = true;
+      $("startScan").disabled = true;
+      $("stopScan").disabled = false;
+      setScanStatus("Kamera aktiv – QR-Code in den Rahmen halten.");
+    } catch (err) {
+      setScanStatus("Kamera konnte nicht gestartet werden. Erlaube den Kamerazugriff und öffne die Seite über HTTPS oder localhost.");
+      console.error(err);
+    }
+  }
+
+  async function stopCamera() {
+    if (!scanner || !scanning) return;
+    try { await scanner.stop(); await scanner.clear(); } catch (err) { console.warn(err); }
+    scanning = false;
+    $("startScan").disabled = false;
+    $("stopScan").disabled = true;
+    setScanStatus("Scan gestoppt.");
+  }
+
+  $("startScan").addEventListener("click", startCamera);
+  $("stopScan").addEventListener("click", stopCamera);
+  $("loadCode").addEventListener("click", () => loadSong($("manualCode").value));
+  $("manualCode").addEventListener("keydown", e => { if (e.key === "Enter") loadSong($("manualCode").value); });
+  reveal.addEventListener("click", revealSong);
+
+  playPause.addEventListener("click", async () => {
+    if (!spotifyController || !currentSong) return;
+    try {
+      if (playing) {
+        spotifyController.pause();
+        playing = false;
+        playPause.textContent = "▶";
+        setTrackStatus("Pausiert.");
+      } else {
+        spotifyController.play();
+        playing = true;
+        playPause.textContent = "Ⅱ";
+        setTrackStatus("Wiedergabe angefordert.");
+      }
+    } catch (err) {
+      setTrackStatus("Spotify konnte die Wiedergabe nicht starten. Prüfe Spotify-Verfügbarkeit oder öffne den Song in Spotify.");
+      console.error(err);
+    }
+  });
+
+  $("next").addEventListener("click", () => {
+    const codes = Object.keys(SONGS);
+    if (!codes.length) return;
+    const index = codes.indexOf(currentCode);
+    const nextCode = codes[(index + 1) % codes.length];
+    loadSong(nextCode);
+  });
+
+  $("addSong").addEventListener("click", () => {
+    const code = $("customCode").value.trim();
+    const title = $("customTitle").value.trim();
+    const artist = $("customArtist").value.trim();
+    const year = Number($("customYear").value);
+    const spotifyTrackId = getSpotifyTrackId($("customSpotify").value);
+    if (!code || !title || !artist || !year || !spotifyTrackId) {
+      alert("Bitte fülle alle Felder aus.");
+      return;
+    }
+    if (!/^[0-9]+$/.test(code)) {
+      alert("Bitte als Songnummer nur Ziffern verwenden, z. B. 4.");
+      return;
+    }
+    SONGS[code] = { title, artist, year, spotifyTrackId };
+    alert(`Song ${code} wurde für diese Sitzung hinzugefügt.`);
+    loadSong(code);
+  });
+
+  // Spotify Embed API initialisiert den Player. Die Wiedergabe startet erst nach
+  // einem Klick, damit sie durch eine Nutzeraktion ausgelöst wird.
+  window.onSpotifyIframeApiReady = (IFrameAPI) => {
+    const element = $("spotifyEmbed");
+    const options = {
+      width: "1%",
+      height: "1",
+      uri: "spotify:track:4uLU6hMCjMI75M1A2tKUQC"
+    };
+    IFrameAPI.createController(element, options, controller => {
+      spotifyController = controller;
+      playerReady = true;
+      playPause.disabled = !currentSong;
+      if (currentSong) {
+        const id = getSpotifyTrackId(currentSong.spotifyTrackId);
+        if (/^[A-Za-z0-9]{22}$/.test(id)) {
+          controller.loadUri(`spotify:track:${id}`);
+          setTrackStatus(`Song ${currentCode} bereit. Drücke ▶, um zu starten.`);
+        }
+      } else {
+        setTrackStatus("Spotify bereit. Scanne einen QR-Code oder gib eine Nummer ein.");
+      }
+    });
+  };
+
+  // Praktischer Startzustand: Datenbankeintrag 1 wird geladen, aber nicht abgespielt.
+  loadSong("1");
+</script>
+</body>
+</html>
